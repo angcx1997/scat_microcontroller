@@ -30,6 +30,9 @@
 #include <stdio.h>
 //#include <bno055.h>
 #include <dwt_delay.h>
+#include <usbd_cdc_if.h>
+#include <Sabertooth.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,7 +48,9 @@
 #define MOTOR_TIM htim4
 #define LEFT_MOTOR_CHANNEL CCR3
 #define RIGHT_MOTOR_CHANNEL CCR1
-
+#define LEFT_MOTOR			TARGET_1
+#define RIGHT_MOTOR			TARGET_2
+#define SABERTOOTH_UART huart4
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -105,6 +110,10 @@ double pid_freq = 500;
 //0.1 = 500, 0.2 = 450, 0.5 = 350, 0.7 = 320, 0.9 = 320
 //Feedforward equation to line fit = y=290(x-0.9)^2 + 310
 
+//Data logging
+Sabertooth_Handler sabertooth_handler;
+uint8_t motor_receive_buf[9];
+double angular_velocity[2];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -186,6 +195,8 @@ int main(void)
 
   //Initialize IMU, check that it is connected
   IMU_Init();
+
+  MotorInit(&sabertooth_handler, 128, &huart4);
 
   //Initialize BNO055
 //  BNO055Init();
@@ -275,6 +286,15 @@ double base_right_d_ramp_rate = 150;
 		  encoderRead(encoder);
 		  calcVelFromEncoder(encoder, velocity);
 		  e_stop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
+
+		  //For data logging
+		  MotorReadBattery(&sabertooth_handler);
+		  MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
+		  MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
+		  MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
+		  MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
+		  angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
+		  angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
 
 		  //use speed from data_from_ros array, pass on to motors, ensure the data is valid by checking end bit
 		  if((uint16_t)data_from_ros[SIZE_DATA_FROM_ROS / 2 - 1] == 0xFFFB)
@@ -656,7 +676,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 90-1;
+  htim4.Init.Prescaler = 72-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 20000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -845,6 +865,37 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+  * @brief  SYSTICK callback.
+  * @retval None
+  */
+void HAL_SYSTICK_Callback(void)
+{
+  /* NOTE : This function Should not be modified, when the callback is needed,
+            the HAL_SYSTICK_Callback could be implemented in the user file
+   */
+//	Data that needed to be logged
+//	- motor
+//		- battery
+//		- current x2
+//		- duty cycle x2
+//	- angular velocity x2
+	int16_t vcp_tx_buffer[7] = {0};
+	vcp_tx_buffer[0] = sabertooth_handler.motor1.battery;
+	vcp_tx_buffer[1] = sabertooth_handler.motor1.current;
+	vcp_tx_buffer[2] = sabertooth_handler.motor2.current;
+	vcp_tx_buffer[3] = sabertooth_handler.motor1.duty_cycle;
+	vcp_tx_buffer[4] = sabertooth_handler.motor2.duty_cycle;
+	vcp_tx_buffer[5] = (int16_t)(angular_velocity[LEFT_INDEX] * 1000);
+	vcp_tx_buffer[6] = (int16_t)(angular_velocity[RIGHT_INDEX] * 1000);
+
+	CDC_Transmit_FS((uint8_t*)vcp_tx_buffer, sizeof(vcp_tx_buffer));
+
+
+
+}
+
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	//If adc callback by joystick adc
@@ -926,6 +977,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 			}
 
 		}
+	}
+
+	if (huart == &SABERTOOTH_UART)
+	{
+		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
 	}
 }
 

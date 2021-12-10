@@ -59,6 +59,7 @@
 //Use to indicate buffer size of sending data since different size is used for get and set
 #define SEND_BUF_SIZE_GET		7
 #define SEND_BUF_SIZE_SET		9
+#define RECEIVE_BUF_SIZE		9
 
 
 static uint8_t send_buf[9] = { 0 };
@@ -154,7 +155,6 @@ void MotorTimeout(Sabertooth_Handler *st_handler, int16_t value) {
 
 void MotorReadBattery(Sabertooth_Handler *st_handler) {
 	writeSabertoothGetCommand(st_handler, GET_BATTERY, TYPE_MOTOR, TARGET_1);
-	writeSabertoothGetCommand(st_handler, GET_BATTERY, TYPE_MOTOR, TARGET_2);
 }
 
 void MotorReadCurrent(Sabertooth_Handler *st_handler, uint8_t motor) {
@@ -207,7 +207,8 @@ void MotorProcessReply(Sabertooth_Handler *st_handler, uint8_t *receive_buf, uin
 	switch (receive_buf[IDX_COMMAND_VALUE]) {
 		case GET_BATTERY:
 		case GET_BATTERY + 1:
-			pMotor->battery = (receive_buf[IDX_COMMAND_VALUE] == GET_BATTERY) ? reply_value : -reply_value;
+			st_handler->motor1.battery = (receive_buf[IDX_COMMAND_VALUE] == GET_BATTERY) ? reply_value : -reply_value;
+			st_handler->motor2.battery = (receive_buf[IDX_COMMAND_VALUE] == GET_BATTERY) ? reply_value : -reply_value;
 			break;
 		case GET_CURRENT:
 		case GET_CURRENT + 1:
@@ -249,12 +250,10 @@ static void writeSabertoothCommand(Sabertooth_Handler *st_handler, uint8_t comma
 	}
 	send_buf[IDX_CHECKSUM_2(command)] = dataChecksum & 127;
 	if (command == SABERTOOTH_SET) {
-		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET,1);
+		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET,HAL_MAX_DELAY);
 	} else if (command == SABERTOOTH_GET) {
-		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_GET,1);
-		uint32_t t = HAL_GetTick();
-		while(HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, 9) != HAL_OK
-				|| HAL_GetTick() - t > 5000);
+		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_GET,HAL_MAX_DELAY);
+		while(HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE) != HAL_OK);
 
 	}
 }
