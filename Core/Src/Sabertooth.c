@@ -122,6 +122,16 @@ void MotorInit(Sabertooth_Handler* st_handler, uint8_t address, UART_HandleTypeD
 	st_handler->motor2.temp = 0;
 }
 
+void PowerOn(Sabertooth_Handler* st_handler){
+	writeSabertoothSetCommand(st_handler, SET_VALUE, TYPE_POWER, TARGET_1, SABERTOOTH_MAX_ALLOWABLE_VALUE);
+	writeSabertoothSetCommand(st_handler, SET_VALUE, TYPE_POWER, TARGET_2, SABERTOOTH_MAX_ALLOWABLE_VALUE);
+}
+
+void PowerOff(Sabertooth_Handler* st_handler){
+	writeSabertoothSetCommand(st_handler, SET_VALUE, TYPE_POWER, TARGET_1, SABERTOOTH_MIN_ALLOWABLE_VALUE);
+	writeSabertoothSetCommand(st_handler, SET_VALUE, TYPE_POWER, TARGET_2, SABERTOOTH_MIN_ALLOWABLE_VALUE);
+}
+
 
 void MotorThrottle(Sabertooth_Handler *st_handler, uint8_t motor, int16_t power) {
 	if (motor < 1 || motor > 2)

@@ -101,6 +101,24 @@ void MotorReadTemperature(Sabertooth_Handler* st_handler, uint8_t motor);
  */
 void MotorReadDutyCycle(Sabertooth_Handler* st_handler, uint8_t motor);
 
+/*!
+ * Process reply receive through serial RX.
+ * param st_handler 	pointer to sabertooth.
+ * param receive_buf 	pointer to receive array.
+ * param size			size of receivei buffer
+ */
 void MotorProcessReply(Sabertooth_Handler *st_handler, uint8_t *receive_buf, uint8_t size);
+
+/*!
+ * Turn On the power of the P1 and P2 pin.
+ * param st_handler 	pointer to sabertooth.
+ */
+void PowerOn(Sabertooth_Handler* st_handler);
+
+/*!
+ * Turn off  the power of the P1 and P2 pin.
+ * param st_handler 	pointer to sabertooth.
+ */
+void PowerOff(Sabertooth_Handler* st_handler);
 
 #endif /* INC_SABERTOOTH_H_ */

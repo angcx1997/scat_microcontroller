@@ -114,6 +114,7 @@ double pid_freq = 500;
 Sabertooth_Handler sabertooth_handler;
 uint8_t motor_receive_buf[9];
 double angular_velocity[2];
+char str[256];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -192,6 +193,7 @@ int main(void)
 
   //Engage brakes
   BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
+  PowerOff(&sabertooth_handler);
 
   //Initialize IMU, check that it is connected
   IMU_Init();
@@ -888,8 +890,12 @@ void HAL_SYSTICK_Callback(void)
 	vcp_tx_buffer[4] = sabertooth_handler.motor2.duty_cycle;
 	vcp_tx_buffer[5] = (int16_t)(angular_velocity[LEFT_INDEX] * 1000);
 	vcp_tx_buffer[6] = (int16_t)(angular_velocity[RIGHT_INDEX] * 1000);
-
-	CDC_Transmit_FS((uint8_t*)vcp_tx_buffer, sizeof(vcp_tx_buffer));
+	sprintf(str, "%10d,%10d,%10d,%10d,%10d,%10d,%10d\n",
+			vcp_tx_buffer[0],vcp_tx_buffer[1],vcp_tx_buffer[2],
+			vcp_tx_buffer[3],vcp_tx_buffer[4],vcp_tx_buffer[5],
+			vcp_tx_buffer[6]);
+	CDC_Transmit_FS((uint8_t*)str, strlen(str));
+//	CDC_Transmit_FS((uint8_t*)vcp_tx_buffer, sizeof(vcp_tx_buffer));
 
 
 
@@ -1023,6 +1029,7 @@ void setBrakes()
 	if((setpoint_vel[LEFT_INDEX] != 0 || setpoint_vel[RIGHT_INDEX] != 0))
 	{
 		BRAKE_TIM.Instance->BRAKE_CHANNEL = 2000;
+		PowerOn(&sabertooth_handler);
 		braked = 0;
 		brake_timer = 0;
 	}
@@ -1038,6 +1045,7 @@ void setBrakes()
 			else if(HAL_GetTick() - brake_timer > engage_brakes_timeout * FREQUENCY)
 			{
 				BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
+				PowerOff(&sabertooth_handler);
 				braked = 1;
 				brake_timer = 0;
 			}

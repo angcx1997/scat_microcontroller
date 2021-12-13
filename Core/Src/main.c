@@ -178,11 +178,8 @@ int main(void)
   HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
 
-  //Start brake PWM pins
-  HAL_TIM_PWM_Start(&BRAKE_TIM, TIM_CHANNEL_4);
 
   //Engage brakes
-  BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
 
   //Initialize IMU, check that it is connected
   IMU_Init();
@@ -685,10 +682,6 @@ static void MX_TIM4_Init(void)
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
