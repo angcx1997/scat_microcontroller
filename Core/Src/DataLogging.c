@@ -70,6 +70,7 @@ TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
@@ -193,13 +194,14 @@ int main(void)
 
   //Engage brakes
   BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
+  MotorInit(&sabertooth_handler, 128, &huart4);
   PowerOff(&sabertooth_handler);
 
   //Initialize IMU, check that it is connected
   IMU_Init();
 
-  MotorInit(&sabertooth_handler, 128, &huart4);
 
+  HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
   //Initialize BNO055
 //  BNO055Init();
 
@@ -799,6 +801,8 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
@@ -988,6 +992,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	if (huart == &SABERTOOTH_UART)
 	{
 		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
+		HAL_UART_Receive_DMA(&huart4, motor_receive_buf, sizeof(motor_receive_buf));
+
 	}
 }
 
@@ -1021,6 +1027,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		//Force STM32 to treat data_to_ros as a uint8_t pointer array as that is what's required.
 		//Data will get sent along as normal, then ROS end can combine 2 bytes of data to get original data
 		HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
+	}
+	if(huart == &SABERTOOTH_UART){
+		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
+		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
 	}
 }
 
