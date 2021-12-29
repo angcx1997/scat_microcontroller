@@ -32,7 +32,7 @@
 #include <dwt_delay.h>
 #include <usbd_cdc_if.h>
 #include <Sabertooth.h>
-
+#include <usb_proxy.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,6 +74,10 @@ DMA_HandleTypeDef hdma_uart4_rx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
+USBD_HandleTypeDef hUsbDeviceFS;
+USBProxyHandler hUSB;
+CRC_HandleTypeDef hcrc;
+
 /* USER CODE BEGIN PV */
 //Variables to store raw data from various sensors and uart
 uint32_t joystick_raw;
@@ -113,6 +117,7 @@ double pid_freq = 500;
 
 //Data logging
 Sabertooth_Handler sabertooth_handler;
+SendFormat send_formatter;
 uint8_t motor_receive_buf[9];
 double angular_velocity[2];
 char str[256];
@@ -129,6 +134,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_SPI6_Init(void);
 static void MX_SPI4_Init(void);
 static void MX_UART4_Init(void);
+static void MX_CRC_Init(void);
 /* USER CODE BEGIN PFP */
 void setBrakes();
 /* USER CODE END PFP */
@@ -181,6 +187,7 @@ int main(void)
   MX_SPI4_Init();
   MX_UART4_Init();
   MX_USB_DEVICE_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 //  DWT_Init();
   //Start motor PWM pins
@@ -208,6 +215,9 @@ int main(void)
   //Start UART output
   HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
   HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw, SIZE_DATA_FROM_ROS);
+
+	USB_Init(&hUsbDeviceFS);
+	USB_DataLogStart();
 
   //********* WHEEL PID *********//
 double base_left_ramp_rate = 100;
@@ -434,8 +444,19 @@ double base_right_d_ramp_rate = 150;
 			  //Send PID commands to motor
 			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
 			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
-		  }
 
+
+		  }
+		  send_formatter.current_1.b16 = sabertooth_handler.motor1.current;
+		 			send_formatter.current_2.b16 = sabertooth_handler.motor2.current;
+		 			send_formatter.duty_cycle_1.b16 = sabertooth_handler.motor1.duty_cycle;
+		 			send_formatter.duty_cycle_2.b16 = sabertooth_handler.motor2.duty_cycle;
+		 			send_formatter.temperature_1.b16 = sabertooth_handler.motor1.temp;
+		 			send_formatter.temperature_2.b16 = sabertooth_handler.motor1.temp;
+		 			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX]*1000;
+		 			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]*1000;
+		 			send_formatter.voltage.b16 = sabertooth_handler.motor1.battery;
+		 			DataLog_Manager(&send_formatter);
 		  prev_time = HAL_GetTick();
 	  }
     /* USER CODE END WHILE */
@@ -869,7 +890,31 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
+/**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
 
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
+}
 /* USER CODE BEGIN 4 */
 /**
   * @brief  SYSTICK callback.
@@ -886,19 +931,21 @@ void HAL_SYSTICK_Callback(void)
 //		- current x2
 //		- duty cycle x2
 //	- angular velocity x2
-	int16_t vcp_tx_buffer[7] = {0};
-	vcp_tx_buffer[0] = sabertooth_handler.motor1.battery;
-	vcp_tx_buffer[1] = sabertooth_handler.motor1.current;
-	vcp_tx_buffer[2] = sabertooth_handler.motor2.current;
-	vcp_tx_buffer[3] = sabertooth_handler.motor1.duty_cycle;
-	vcp_tx_buffer[4] = sabertooth_handler.motor2.duty_cycle;
-	vcp_tx_buffer[5] = (int16_t)(angular_velocity[LEFT_INDEX] * 1000);
-	vcp_tx_buffer[6] = (int16_t)(angular_velocity[RIGHT_INDEX] * 1000);
-	sprintf(str, "%10d,%10d,%10d,%10d,%10d,%10d,%10d\n",
-			vcp_tx_buffer[0],vcp_tx_buffer[1],vcp_tx_buffer[2],
-			vcp_tx_buffer[3],vcp_tx_buffer[4],vcp_tx_buffer[5],
-			vcp_tx_buffer[6]);
-	CDC_Transmit_FS((uint8_t*)str, strlen(str));
+//	int16_t vcp_tx_buffer[7] = {0};
+//	vcp_tx_buffer[0] = sabertooth_handler.motor1.battery;
+//	vcp_tx_buffer[1] = sabertooth_handler.motor1.current;
+//	vcp_tx_buffer[2] = sabertooth_handler.motor2.current;
+//	vcp_tx_buffer[3] = sabertooth_handler.motor1.duty_cycle;
+//	vcp_tx_buffer[4] = sabertooth_handler.motor2.duty_cycle;
+//	vcp_tx_buffer[5] = (int16_t)(angular_velocity[LEFT_INDEX] * 1000);
+//	vcp_tx_buffer[6] = (int16_t)(angular_velocity[RIGHT_INDEX] * 1000);
+//	sprintf(str, "%10d,%10d,%10d,%10d,%10d,%10d,%10d\n",
+//			vcp_tx_buffer[0],vcp_tx_buffer[1],vcp_tx_buffer[2],
+//			vcp_tx_buffer[3],vcp_tx_buffer[4],vcp_tx_buffer[5],
+//			vcp_tx_buffer[6]);
+//	CDC_Transmit_FS((uint8_t*)str, strlen(str));
+//
+
 //	CDC_Transmit_FS((uint8_t*)vcp_tx_buffer, sizeof(vcp_tx_buffer));
 
 
