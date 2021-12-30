@@ -46,6 +46,13 @@
 #define LEFT_MOTOR_CHANNEL CCR3
 #define RIGHT_MOTOR_CHANNEL CCR1
 
+#define SERIAL_CONTROL
+#ifdef SERIAL_CONTROL
+#define SCALING 	(2047/500)
+#else
+#define SCALING 	1
+#endif
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -101,7 +108,7 @@ double target_heading, curr_heading;
 
 //PID struct and their tunings. There's one PID controller for each motor
 PID_Struct left_pid, right_pid, left_ramp_pid, right_ramp_pid, left_d_ramp_pid, right_d_ramp_pid;
-double p = 0.0, i = 100.0, d = 0.0, f = 340, max_i_output = 40;
+double p = 0.0, i = 100.0 * SCALING, d = 0.0, f = 340 * SCALING, max_i_output = 40 * SCALING;
 double pid_freq = 500;
 
 //Feedforward outputs from experimental data, at x speed, what feedforward factor is required
@@ -178,10 +185,17 @@ int main(void)
   /* USER CODE BEGIN 2 */
 //  DWT_Init();
   //Start motor PWM pins
-  HAL_TIM_Base_Start(&MOTOR_TIM);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
+
+
+#ifndef SERIAL_CONTROL
+  	  HAL_TIM_Base_Start(&MOTOR_TIM);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_1);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
+#else
+	  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, 0);
+	  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, 0);
+#endif
 
 
   //Engage brakes
@@ -206,7 +220,7 @@ double base_right_d_ramp_rate = 150;
   PID_Init(&right_pid);
   PID_setPIDF(&right_pid, p, i, d, f);
   PID_setMaxIOutput(&right_pid, max_i_output);
-  PID_setOutputLimits(&right_pid, -500, 500);
+  PID_setOutputLimits(&right_pid, -500 * SCALING, 500 * SCALING);
   PID_setFrequency(&right_pid, pid_freq);
   PID_setOutputRampRate(&right_pid, base_right_ramp_rate);
   PID_setOutputDescentRate(&right_pid, -base_right_d_ramp_rate);
@@ -215,7 +229,7 @@ double base_right_d_ramp_rate = 150;
   PID_Init(&left_pid);
   PID_setPIDF(&left_pid, p, i, d, f);
   PID_setMaxIOutput(&left_pid, max_i_output);
-  PID_setOutputLimits(&left_pid, -500, 500);
+  PID_setOutputLimits(&left_pid, -500 * SCALING, 500 * SCALING);
   PID_setFrequency(&left_pid, pid_freq);
   PID_setOutputRampRate(&left_pid, base_left_ramp_rate);
   PID_setOutputDescentRate(&left_pid, -base_left_d_ramp_rate);
@@ -334,9 +348,9 @@ double base_right_d_ramp_rate = 150;
 
 			  //Upper bound on feedforward equation
 			  if(setpoint_vel[LEFT_INDEX] > 1.0)
-				  f_left = 310;
+				  f_left = 310 * SCALING;
 			  if(setpoint_vel[RIGHT_INDEX] > 1.0)
-				  f_right = 310;
+				  f_right = 310 * SCALING;
 
 			  PID_setF(&left_pid, f_left);
 			  PID_setF(&right_pid, f_right);
@@ -410,8 +424,13 @@ double base_right_d_ramp_rate = 150;
 
 
 			  //Send PID commands to motor
+#ifndef SERIAL_CONTROL
 			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
 			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
+#else
+			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+			  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+#endif
 		  }
 
 		  prev_time = HAL_GetTick();

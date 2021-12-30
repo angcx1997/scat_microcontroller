@@ -51,6 +51,21 @@
 #define LEFT_MOTOR			TARGET_1
 #define RIGHT_MOTOR			TARGET_2
 #define SABERTOOTH_UART huart4
+
+//Define serial control if dont want to use RC to control sabertooth
+//if defned, rmb to switch mode on sabertooth from user mode 1 to 2 and vice versa
+//DIP5 OFF for serial
+//DIP5 ON for RC
+#define SERIAL_CONTROL
+#ifdef SERIAL_CONTROL
+#define SCALING 	(2047/500)
+#else
+#define SCALING 	1
+#endif
+
+//define
+//#define USB_ACTIVATE
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -108,7 +123,7 @@ double target_heading, curr_heading;
 
 //PID struct and their tunings. There's one PID controller for each motor
 PID_Struct left_pid, right_pid, left_ramp_pid, right_ramp_pid, left_d_ramp_pid, right_d_ramp_pid;
-double p = 0.0, i = 100.0, d = 0.0, f = 340, max_i_output = 40;
+double p = 0.0, i = 100.0 * SCALING, d = 0.0, f = 340 * SCALING, max_i_output = 40 * SCALING;
 double pid_freq = 500;
 
 //Feedforward outputs from experimental data, at x speed, what feedforward factor is required
@@ -190,25 +205,29 @@ int main(void)
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 //  DWT_Init();
-  //Start motor PWM pins
-  HAL_TIM_Base_Start(&MOTOR_TIM);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
-
-  //Start brake PWM pins
-  HAL_TIM_PWM_Start(&BRAKE_TIM, TIM_CHANNEL_4);
-
-  //Engage brakes
-  BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
+#ifndef SERIAL_CONTROL
+  	  HAL_TIM_Base_Start(&MOTOR_TIM);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_1);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
+  	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
+#else
+	  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, 0);
+	  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, 0);
+#endif
+//  //Start brake PWM pins
+//  HAL_TIM_PWM_Start(&BRAKE_TIM, TIM_CHANNEL_4);
+//
+//  //Engage brakes
+//  BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
   MotorInit(&sabertooth_handler, 128, &huart4);
-  PowerOff(&sabertooth_handler);
+//  PowerOff(&sabertooth_handler);
 
   //Initialize IMU, check that it is connected
   IMU_Init();
 
 
-  HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
+//  HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
+//  MotorReadBattery(&sabertooth_handler);
   //Initialize BNO055
 //  BNO055Init();
 
@@ -216,20 +235,21 @@ int main(void)
   HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
   HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw, SIZE_DATA_FROM_ROS);
 
+#ifdef USB_ACTIVATE
 	USB_Init(&hUsbDeviceFS);
 	USB_DataLogStart();
-
+#endif
   //********* WHEEL PID *********//
-double base_left_ramp_rate = 100;
-double base_right_ramp_rate = 100;
-double base_left_d_ramp_rate = 150;
-double base_right_d_ramp_rate = 150;
+double base_left_ramp_rate = 100* SCALING;
+double base_right_ramp_rate = 100* SCALING;
+double base_left_d_ramp_rate = 150* SCALING;
+double base_right_d_ramp_rate = 150* SCALING;
 
   //Setup right wheel PID
   PID_Init(&right_pid);
   PID_setPIDF(&right_pid, p, i, d, f);
   PID_setMaxIOutput(&right_pid, max_i_output);
-  PID_setOutputLimits(&right_pid, -500, 500);
+  PID_setOutputLimits(&right_pid, -500 * SCALING, 500 * SCALING);
   PID_setFrequency(&right_pid, pid_freq);
   PID_setOutputRampRate(&right_pid, base_right_ramp_rate);
   PID_setOutputDescentRate(&right_pid, -base_right_d_ramp_rate);
@@ -238,19 +258,19 @@ double base_right_d_ramp_rate = 150;
   PID_Init(&left_pid);
   PID_setPIDF(&left_pid, p, i, d, f);
   PID_setMaxIOutput(&left_pid, max_i_output);
-  PID_setOutputLimits(&left_pid, -500, 500);
+  PID_setOutputLimits(&left_pid, -500 * SCALING, 500 * SCALING);
   PID_setFrequency(&left_pid, pid_freq);
   PID_setOutputRampRate(&left_pid, base_left_ramp_rate);
   PID_setOutputDescentRate(&left_pid, -base_left_d_ramp_rate);
 
   //********* WHEEL ACCEL RAMP PID *********//
-  double right_ramp_p = 100;
-  double left_ramp_p = 100;
-  double max_ramp_rate_inc = 300;
+  double right_ramp_p = 100* SCALING;
+  double left_ramp_p = 100* SCALING;
+  double max_ramp_rate_inc = 300* SCALING;
   //Setup right wheel ramp PID
   PID_Init(&right_ramp_pid);
   PID_setPIDF(&right_ramp_pid, right_ramp_p, 0, 0, 0);
-  PID_setOutputLimits(&right_ramp_pid, 0, 400);
+  PID_setOutputLimits(&right_ramp_pid, 0, 400* SCALING);
   PID_setOutputRampRate(&right_ramp_pid, max_ramp_rate_inc);
   PID_setOutputDescentRate(&right_ramp_pid, -max_ramp_rate_inc);
   PID_setFrequency(&right_ramp_pid, pid_freq);
@@ -258,18 +278,18 @@ double base_right_d_ramp_rate = 150;
   //Setup left wheel ramp PID
   PID_Init(&left_ramp_pid);
   PID_setPIDF(&left_ramp_pid, left_ramp_p, 0, 0, 0);
-  PID_setOutputLimits(&left_ramp_pid, 0, 400);
+  PID_setOutputLimits(&left_ramp_pid, 0, 400* SCALING);
   PID_setOutputRampRate(&left_ramp_pid, max_ramp_rate_inc);
   PID_setOutputDescentRate(&left_ramp_pid, -max_ramp_rate_inc);
   PID_setFrequency(&left_ramp_pid, pid_freq);
 
 
   //********* WHEEL DECEL RAMP PID *********//
-  double right_d_ramp_p = 100;
-  double left_d_ramp_p = 150;
-  double right_max_d_ramp_rate_inc = 200;
-  double left_max_d_ramp_rate_inc = 200;
-  double max_d_increase = 550;
+  double right_d_ramp_p = 100* SCALING;
+  double left_d_ramp_p = 150* SCALING;
+  double right_max_d_ramp_rate_inc = 200* SCALING;
+  double left_max_d_ramp_rate_inc = 200* SCALING;
+  double max_d_increase = 550* SCALING;
   //Setup right wheel d ramp PID
   PID_Init(&right_d_ramp_pid);
   PID_setPIDF(&right_d_ramp_pid, right_d_ramp_p, 0, 0, 0);
@@ -301,12 +321,14 @@ double base_right_d_ramp_rate = 150;
 		  calcVelFromEncoder(encoder, velocity);
 		  e_stop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
 
-		  //For data logging
-		  MotorReadBattery(&sabertooth_handler);
-		  MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
-		  MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
-		  MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
-		  MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
+//		  //For data logging
+//		  MotorReadBattery(&sabertooth_handler);
+//		  MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
+//		  MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
+//		  MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
+//		  MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
+		  MotorReadTemperature(&sabertooth_handler, LEFT_MOTOR);
+//		  MotorReadTemperature(&sabertooth_handler, RIGHT_MOTOR);
 		  angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
 		  angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
 
@@ -370,6 +392,8 @@ double base_right_d_ramp_rate = 150;
 			  if(setpoint_vel[RIGHT_INDEX] > 1.0)
 				  f_right = 310;
 
+			  f_left = f_left * SCALING;
+			  f_right = f_right * SCALING;
 			  PID_setF(&left_pid, f_left);
 			  PID_setF(&right_pid, f_right);
 
@@ -442,21 +466,27 @@ double base_right_d_ramp_rate = 150;
 
 
 			  //Send PID commands to motor
-			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
-			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
-
+			  #ifndef SERIAL_CONTROL
+			  			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
+			  			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
+			  #else
+//			  			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+//			  			  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+			  #endif
 
 		  }
-		  send_formatter.current_1.b16 = sabertooth_handler.motor1.current;
-		 			send_formatter.current_2.b16 = sabertooth_handler.motor2.current;
-		 			send_formatter.duty_cycle_1.b16 = sabertooth_handler.motor1.duty_cycle;
-		 			send_formatter.duty_cycle_2.b16 = sabertooth_handler.motor2.duty_cycle;
-		 			send_formatter.temperature_1.b16 = sabertooth_handler.motor1.temp;
-		 			send_formatter.temperature_2.b16 = sabertooth_handler.motor1.temp;
-		 			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX]*1000;
-		 			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]*1000;
-		 			send_formatter.voltage.b16 = sabertooth_handler.motor1.battery;
-		 			DataLog_Manager(&send_formatter);
+#ifdef USB_ACTIVATE
+			send_formatter.current_1.b16 = sabertooth_handler.motor1.current;
+			send_formatter.current_2.b16 = sabertooth_handler.motor2.current;
+			send_formatter.duty_cycle_1.b16 = sabertooth_handler.motor1.duty_cycle;
+			send_formatter.duty_cycle_2.b16 = sabertooth_handler.motor2.duty_cycle;
+			send_formatter.temperature_1.b16 = sabertooth_handler.motor1.temp;
+			send_formatter.temperature_2.b16 = sabertooth_handler.motor1.temp;
+			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX]*1000;
+			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]*1000;
+			send_formatter.voltage.b16 = sabertooth_handler.motor1.battery;
+			DataLog_Manager(&send_formatter);
+#endif
 		  prev_time = HAL_GetTick();
 	  }
     /* USER CODE END WHILE */
@@ -793,7 +823,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 921600;
+  huart2.Init.BaudRate = 230400;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -970,6 +1000,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	static int huart_synchronized = 0;
+	static int count = 1;
 	static uint8_t synchronize_data;
 	if(huart == &ROS_UART)
 	{
@@ -1036,10 +1067,33 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		}
 	}
 
+
 	if (huart == &SABERTOOTH_UART)
 	{
 		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
-		HAL_UART_Receive_DMA(&huart4, motor_receive_buf, sizeof(motor_receive_buf));
+		if (count < 5) count++;
+		else count = 1;
+//		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
+		//For data logging
+//		switch(count){
+//		case 1:
+//			MotorReadBattery(&sabertooth_handler);
+//			break;
+//		case 2:
+//			MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
+//			break;
+//		case 3:
+//			MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
+//			break;
+//		case 4:
+//			MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
+//			break;
+//		case 5:
+//			MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
+//			break;
+//		}
+
+
 
 	}
 }
@@ -1075,10 +1129,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		//Data will get sent along as normal, then ROS end can combine 2 bytes of data to get original data
 		HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
 	}
-	if(huart == &SABERTOOTH_UART){
-		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
-		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
-	}
+//	if(huart == &SABERTOOTH_UART){
+//		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
+//		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
+//	}
 }
 
 void setBrakes()

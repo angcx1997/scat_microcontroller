@@ -138,10 +138,10 @@ void MotorThrottle(Sabertooth_Handler *st_handler, uint8_t motor, int16_t power)
 		return;
 	clamp(power, SABERTOOTH_MIN_ALLOWABLE_VALUE, SABERTOOTH_MAX_ALLOWABLE_VALUE);
 	uint8_t target_number = (motor == 1) ? TARGET_1 : TARGET_2;
-	if(target_number == 1)
-		st_handler->motor1.duty_cycle = power;
-	else
-		st_handler->motor2.duty_cycle = power;
+//	if(target_number == 1)
+//		st_handler->motor1.duty_cycle = power;
+//	else
+//		st_handler->motor2.duty_cycle = power;
 	writeSabertoothSetCommand(st_handler, SET_VALUE, TYPE_MOTOR, target_number, power);
 }
 
@@ -230,7 +230,7 @@ void MotorProcessReply(Sabertooth_Handler *st_handler, uint8_t *receive_buf, uin
 			break;
 		case GET_DUTY_CYCLE:
 		case GET_DUTY_CYCLE + 1:
-			pMotor->temp = (receive_buf[IDX_COMMAND_VALUE] == GET_TEMP) ? reply_value : -reply_value;
+			pMotor->duty_cycle = (receive_buf[IDX_COMMAND_VALUE] == GET_DUTY_CYCLE) ? reply_value : -reply_value;
 			break;
 		default:
 			return;
@@ -260,10 +260,13 @@ static void writeSabertoothCommand(Sabertooth_Handler *st_handler, uint8_t comma
 	}
 	send_buf[IDX_CHECKSUM_2(command)] = dataChecksum & 127;
 	if (command == SABERTOOTH_SET) {
-		HAL_UART_Transmit_IT(st_handler->huart, send_buf, SEND_BUF_SIZE_SET);
+		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET, HAL_MAX_DELAY);
+//		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET) != HAL_OK);
 	} else if (command == SABERTOOTH_GET) {
-		HAL_UART_Transmit_IT(st_handler->huart, send_buf, SEND_BUF_SIZE_GET);
+		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_GET, HAL_MAX_DELAY);
+//		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_GET) != HAL_OK);
 //		while(HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE) != HAL_OK);
+//		HAL_UART_Receive_IT(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE)!=HAL_OK);
 
 	}
 }
