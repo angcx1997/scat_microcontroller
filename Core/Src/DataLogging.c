@@ -56,7 +56,7 @@
 //if defned, rmb to switch mode on sabertooth from user mode 1 to 2 and vice versa
 //DIP5 OFF for serial
 //DIP5 ON for RC
-#define SERIAL_CONTROL
+//#define SERIAL_CONTROL
 #ifdef SERIAL_CONTROL
 #define SCALING 	(2047/500)
 #else
@@ -86,6 +86,7 @@ TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart4;
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_uart4_rx;
+DMA_HandleTypeDef hdma_uart4_tx;
 DMA_HandleTypeDef hdma_usart2_rx;
 DMA_HandleTypeDef hdma_usart2_tx;
 
@@ -117,7 +118,6 @@ uint32_t brake_timer = 0;
 uint32_t prev_uart_time = 0;
 double engage_brakes_timeout = 5; //5s
 double angular_output = 0;
-
 //Velocity stuff
 double target_heading, curr_heading;
 
@@ -135,6 +135,7 @@ Sabertooth_Handler sabertooth_handler;
 SendFormat send_formatter;
 uint8_t motor_receive_buf[9];
 double angular_velocity[2];
+uint32_t prev_st_uart_time = 0;
 char str[256];
 /* USER CODE END PV */
 
@@ -205,20 +206,23 @@ int main(void)
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 //  DWT_Init();
+  HAL_Delay(100);
+
 #ifndef SERIAL_CONTROL
   	  HAL_TIM_Base_Start(&MOTOR_TIM);
   	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_1);
   	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_2);
   	  HAL_TIM_PWM_Start(&MOTOR_TIM, TIM_CHANNEL_3);
 #else
+  	  MotorInit(&sabertooth_handler, 128, &huart4);
 	  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, 0);
 	  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, 0);
 #endif
 //  //Start brake PWM pins
-//  HAL_TIM_PWM_Start(&BRAKE_TIM, TIM_CHANNEL_4);
+  HAL_TIM_PWM_Start(&BRAKE_TIM, TIM_CHANNEL_4);
 //
 //  //Engage brakes
-//  BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
+  BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
   MotorInit(&sabertooth_handler, 128, &huart4);
 //  PowerOff(&sabertooth_handler);
 
@@ -230,7 +234,7 @@ int main(void)
 //  MotorReadBattery(&sabertooth_handler);
   //Initialize BNO055
 //  BNO055Init();
-
+  MotorReadBattery(&sabertooth_handler);
   //Start UART output
   HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
   HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw, SIZE_DATA_FROM_ROS);
@@ -320,14 +324,13 @@ double base_right_d_ramp_rate = 150* SCALING;
 		  encoderRead(encoder);
 		  calcVelFromEncoder(encoder, velocity);
 		  e_stop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
-
 //		  //For data logging
 //		  MotorReadBattery(&sabertooth_handler);
 //		  MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
 //		  MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
 //		  MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
 //		  MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
-		  MotorReadTemperature(&sabertooth_handler, LEFT_MOTOR);
+//		  MotorReadTemperature(&sabertooth_handler, LEFT_MOTOR);
 //		  MotorReadTemperature(&sabertooth_handler, RIGHT_MOTOR);
 		  angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
 		  angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
@@ -410,6 +413,11 @@ double base_right_d_ramp_rate = 150* SCALING;
 				  setpoint_vel[LEFT_INDEX] = 0;
 				  setpoint_vel[RIGHT_INDEX] = 0;
 				  HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw, SIZE_DATA_FROM_ROS);
+			  }else if((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.2)
+			  {
+//				  setpoint_vel[LEFT_INDEX] = 0;
+//				  setpoint_vel[RIGHT_INDEX] = 0;
+				  MotorReadBattery(&sabertooth_handler);
 			  }
 
 			  //Unbrake motors if there is command, brake otherwise
@@ -470,8 +478,8 @@ double base_right_d_ramp_rate = 150* SCALING;
 			  			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
 			  			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
 			  #else
-//			  			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
-//			  			  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+			  			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+			  			  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
 			  #endif
 
 		  }
@@ -696,7 +704,7 @@ static void MX_SPI6_Init(void)
   hspi6.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi6.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi6.Init.NSS = SPI_NSS_SOFT;
-  hspi6.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+  hspi6.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi6.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi6.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi6.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -719,58 +727,66 @@ static void MX_SPI6_Init(void)
 static void MX_TIM4_Init(void)
 {
 
-  /* USER CODE BEGIN TIM4_Init 0 */
+	  /* USER CODE BEGIN TIM4_Init 0 */
 
-  /* USER CODE END TIM4_Init 0 */
+	  /* USER CODE END TIM4_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
+	  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+	  TIM_MasterConfigTypeDef sMasterConfig = {0};
+	  TIM_OC_InitTypeDef sConfigOC = {0};
 
-  /* USER CODE BEGIN TIM4_Init 1 */
+	  /* USER CODE BEGIN TIM4_Init 1 */
 
-  /* USER CODE END TIM4_Init 1 */
-  htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 72-1;
-  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 20000-1;
-  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 1500;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM4_Init 2 */
+	  /* USER CODE END TIM4_Init 1 */
+	  htim4.Instance = TIM4;
+	  htim4.Init.Prescaler = 72-1;
+	  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+	  htim4.Init.Period = 20000-1;
+	  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+	  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+	  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+	  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+	  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+	  sConfigOC.Pulse = 1500;
+	  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+	  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  /* USER CODE BEGIN TIM4_Init 2 */
 
-  /* USER CODE END TIM4_Init 2 */
-  HAL_TIM_MspPostInit(&htim4);
+	  /* USER CODE END TIM4_Init 2 */
+	  HAL_TIM_MspPostInit(&htim4);
 
 }
 
@@ -854,6 +870,10 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream2_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream2_IRQn);
+  /* DMA1_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream4_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream4_IRQn);
+  /* DMA1_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 1, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
@@ -1070,28 +1090,30 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 	if (huart == &SABERTOOTH_UART)
 	{
+		//Mark previous UART time
+		prev_st_uart_time = HAL_GetTick();
 		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
 		if (count < 5) count++;
 		else count = 1;
 //		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
 		//For data logging
-//		switch(count){
-//		case 1:
-//			MotorReadBattery(&sabertooth_handler);
-//			break;
-//		case 2:
-//			MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
-//			break;
-//		case 3:
-//			MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
-//			break;
-//		case 4:
-//			MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
-//			break;
-//		case 5:
-//			MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
-//			break;
-//		}
+		switch(count){
+		case 1:
+			MotorReadBattery(&sabertooth_handler);
+			break;
+		case 2:
+			MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
+			break;
+		case 3:
+			MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
+			break;
+		case 4:
+			MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
+			break;
+		case 5:
+			MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
+			break;
+		}
 
 
 
@@ -1129,10 +1151,9 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 		//Data will get sent along as normal, then ROS end can combine 2 bytes of data to get original data
 		HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*)data_to_ros, (uint16_t)SIZE_DATA_TO_ROS * 2);
 	}
-//	if(huart == &SABERTOOTH_UART){
-//		MotorProcessReply(&sabertooth_handler, motor_receive_buf, sizeof(motor_receive_buf));
-//		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
-//	}
+	if(huart == &SABERTOOTH_UART){
+		HAL_UART_Receive_DMA(&SABERTOOTH_UART, motor_receive_buf, sizeof(motor_receive_buf));
+	}
 }
 
 void setBrakes()
@@ -1140,7 +1161,7 @@ void setBrakes()
 	if((setpoint_vel[LEFT_INDEX] != 0 || setpoint_vel[RIGHT_INDEX] != 0))
 	{
 		BRAKE_TIM.Instance->BRAKE_CHANNEL = 2000;
-		PowerOn(&sabertooth_handler);
+//		PowerOn(&sabertooth_handler);
 		braked = 0;
 		brake_timer = 0;
 	}
@@ -1156,7 +1177,7 @@ void setBrakes()
 			else if(HAL_GetTick() - brake_timer > engage_brakes_timeout * FREQUENCY)
 			{
 				BRAKE_TIM.Instance->BRAKE_CHANNEL = 1000;
-				PowerOff(&sabertooth_handler);
+//				PowerOff(&sabertooth_handler);
 				braked = 1;
 				brake_timer = 0;
 			}
@@ -1176,6 +1197,7 @@ void Error_Handler(void)
 	__disable_irq();
 	while (1)
 	{
+
 	}
   /* USER CODE END Error_Handler_Debug */
 }

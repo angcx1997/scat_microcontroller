@@ -7,7 +7,7 @@
 
 #include "Sabertooth.h"
 #include "string.h"
-
+extern DMA_HandleTypeDef hdma_uart4_tx;
 #define MAX(x,y) 	(((x) > (y)) ? (x) : (y))
 #define MIN(x,y) 	(((x) < (y)) ? (x) : (y))
 
@@ -20,13 +20,13 @@
 #define SET_VALUE				0x00	/*!< Set the value >*/
 #define SET_KEEP_ALIVE			0x10	/*!< A keep-alive will reset the serial timeout without taking any action. >*/
 #define SET_SHUTDOWN			0x20	/*!< Set the value >*/
-#define SET_TIMEOUT				0x30	/*!< Set the value >*/
+#define SET_TIMEOUT				0x40	/*!< Set the value >*/
 
 //GET Command Value
 #define GET_DUTY_CYCLE			0x00	/*!< Get the value >*/
 #define GET_BATTERY				0x10	/*!< Get the battery voltage, in tenth >*/
 #define GET_CURRENT				0x20	/*!< Get the current, in amps >*/
-#define GET_TEMP				0x30	/*!< Get the temp, in celcius >*/
+#define GET_TEMP				0x40	/*!< Get the temp, in celcius >*/
 
 //Desired output type from the motor driver
 #define TYPE_MOTOR				(uint8_t)'M'
@@ -260,12 +260,29 @@ static void writeSabertoothCommand(Sabertooth_Handler *st_handler, uint8_t comma
 	}
 	send_buf[IDX_CHECKSUM_2(command)] = dataChecksum & 127;
 	if (command == SABERTOOTH_SET) {
-		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET, HAL_MAX_DELAY);
-//		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET) != HAL_OK);
+//		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET, HAL_MAX_DELAY);
+		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET) != HAL_OK)
+		{
+//			i++;
+//			if (i > 50)
+//				Error_Handler();
+		}
 	} else if (command == SABERTOOTH_GET) {
-		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_GET, HAL_MAX_DELAY);
+//		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_GET, HAL_MAX_DELAY);
+		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET) != HAL_OK)
+		{
+			i++;
+			if (i > 50)
+				HAL_DMA_Abort(&hdma_uart4_tx);
+		}
 //		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_GET) != HAL_OK);
-//		while(HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE) != HAL_OK);
+//		while(HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE) != HAL_OK){
+//			i++;
+//			if (i > 5000)
+//				Error_Handler();
+//		}
+
+//		HAL_UART_Receive_DMA(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE);
 //		HAL_UART_Receive_IT(st_handler->huart, motor_receive_buf, RECEIVE_BUF_SIZE)!=HAL_OK);
 
 	}
