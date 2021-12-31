@@ -7,6 +7,7 @@
 
 #include "usb_proxy.h"
 
+#define LOG_DATA_SIZE  22
 USBProxyHandler hUSB;
 CRC_HandleTypeDef hcrc;
 
@@ -128,14 +129,14 @@ void DataLog_CargoTransmit(SendFormat *send_format) {
 	//Velocity
 	hUSB.txBuf[i++] = send_format->velocity_2.b8[0];
 	hUSB.txBuf[i++] = send_format->velocity_2.b8[1];
-	//Temperature
-	hUSB.txBuf[i++] = send_format->temperature_1.b8[0];
-	hUSB.txBuf[i++] = send_format->temperature_1.b8[1];
-	//Temperature
-	hUSB.txBuf[i++] = send_format->temperature_2.b8[0];
-	hUSB.txBuf[i++] = send_format->temperature_2.b8[1];
+//	//Temperature
+//	hUSB.txBuf[i++] = send_format->temperature_1.b8[0];
+//	hUSB.txBuf[i++] = send_format->temperature_1.b8[1];
+//	//Temperature
+//	hUSB.txBuf[i++] = send_format->temperature_2.b8[0];
+//	hUSB.txBuf[i++] = send_format->temperature_2.b8[1];
 
-	hUSB.dataLogBytes = 26;
+	hUSB.dataLogBytes = LOG_DATA_SIZE;
 	USB_Transmit_Cargo(hUSB.txBuf, hUSB.dataLogBytes);
 }
 

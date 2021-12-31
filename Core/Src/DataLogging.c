@@ -64,7 +64,7 @@
 #endif
 
 //define
-//#define USB_ACTIVATE
+#define USB_ACTIVATE
 
 /* USER CODE END PD */
 
@@ -966,43 +966,6 @@ static void MX_CRC_Init(void)
 
 }
 /* USER CODE BEGIN 4 */
-/**
-  * @brief  SYSTICK callback.
-  * @retval None
-  */
-void HAL_SYSTICK_Callback(void)
-{
-  /* NOTE : This function Should not be modified, when the callback is needed,
-            the HAL_SYSTICK_Callback could be implemented in the user file
-   */
-//	Data that needed to be logged
-//	- motor
-//		- battery
-//		- current x2
-//		- duty cycle x2
-//	- angular velocity x2
-//	int16_t vcp_tx_buffer[7] = {0};
-//	vcp_tx_buffer[0] = sabertooth_handler.motor1.battery;
-//	vcp_tx_buffer[1] = sabertooth_handler.motor1.current;
-//	vcp_tx_buffer[2] = sabertooth_handler.motor2.current;
-//	vcp_tx_buffer[3] = sabertooth_handler.motor1.duty_cycle;
-//	vcp_tx_buffer[4] = sabertooth_handler.motor2.duty_cycle;
-//	vcp_tx_buffer[5] = (int16_t)(angular_velocity[LEFT_INDEX] * 1000);
-//	vcp_tx_buffer[6] = (int16_t)(angular_velocity[RIGHT_INDEX] * 1000);
-//	sprintf(str, "%10d,%10d,%10d,%10d,%10d,%10d,%10d\n",
-//			vcp_tx_buffer[0],vcp_tx_buffer[1],vcp_tx_buffer[2],
-//			vcp_tx_buffer[3],vcp_tx_buffer[4],vcp_tx_buffer[5],
-//			vcp_tx_buffer[6]);
-//	CDC_Transmit_FS((uint8_t*)str, strlen(str));
-//
-
-//	CDC_Transmit_FS((uint8_t*)vcp_tx_buffer, sizeof(vcp_tx_buffer));
-
-
-
-}
-
-
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 	//If adc callback by joystick adc
