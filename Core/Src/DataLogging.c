@@ -137,6 +137,10 @@ uint8_t motor_receive_buf[9];
 double angular_velocity[2];
 uint32_t prev_st_uart_time = 0;
 char str[256];
+
+int tick_count = 0;
+float v = 0;
+float v_i = 26.6;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -324,14 +328,7 @@ double base_right_d_ramp_rate = 150* SCALING;
 		  encoderRead(encoder);
 		  calcVelFromEncoder(encoder, velocity);
 		  e_stop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
-//		  //For data logging
-//		  MotorReadBattery(&sabertooth_handler);
-//		  MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
-//		  MotorReadCurrent(&sabertooth_handler, RIGHT_MOTOR);
-//		  MotorReadDutyCycle(&sabertooth_handler, LEFT_MOTOR);
-//		  MotorReadDutyCycle(&sabertooth_handler, RIGHT_MOTOR);
-//		  MotorReadTemperature(&sabertooth_handler, LEFT_MOTOR);
-//		  MotorReadTemperature(&sabertooth_handler, RIGHT_MOTOR);
+		  //For data logging
 		  angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
 		  angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
 
@@ -473,9 +470,11 @@ double base_right_d_ramp_rate = 150* SCALING;
 			  }
 
 
+
 			  //Send PID commands to motor
 			  #ifndef SERIAL_CONTROL
-			  			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
+
+			  			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
 			  			  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
 			  #else
 			  			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
@@ -483,6 +482,53 @@ double base_right_d_ramp_rate = 150* SCALING;
 			  #endif
 
 		  }
+		  if((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.2)
+		  {
+//				  setpoint_vel[LEFT_INDEX] = 0;
+//				  setpoint_vel[RIGHT_INDEX] = 0;
+			  MotorReadBattery(&sabertooth_handler);
+		  }
+
+		  //If e st
+		  //Square wave
+//		  if (tick_count <= 2500){
+//			  v = 12;
+//		  }
+//		  else{
+//			  v = -12;
+//		  }
+//		  tick_count++;
+//		  if (tick_count >5000)
+//				  tick_count = 0;
+
+		  //mixed (fourier) voltage signal
+			  float t = tick_count/1000;
+			  tick_count++;
+			  v = 12 * ( sin(2*M_PI*0.1*t) + sin(2*M_PI*0.2*t) + sin(2*M_PI*0.4*t) + sin(2*M_PI*t));
+
+
+		  //calculate pwm
+		  float duty_cycle = v / (v_i * 0.9735);
+			  motor_command[LEFT_INDEX] = (int)(duty_cycle * 500.0);
+		  motor_command[RIGHT_INDEX] = (int)(duty_cycle * 500.0);
+
+		  		  			  if(e_stop == 1)
+		  		  			  {
+		  		  				motor_command[LEFT_INDEX] = 0;
+		  		  			motor_command[RIGHT_INDEX] = 0;
+		  		  			  }
+
+
+
+		  //Send PID commands to motor
+		  #ifndef SERIAL_CONTROL
+
+					  MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX] + 1500;
+			  			  MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX] + 1500;
+		  #else
+					  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+					  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+		  #endif
 #ifdef USB_ACTIVATE
 			send_formatter.current_1.b16 = sabertooth_handler.motor1.current;
 			send_formatter.current_2.b16 = sabertooth_handler.motor2.current;
