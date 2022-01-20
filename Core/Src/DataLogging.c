@@ -33,6 +33,7 @@
 #include <usbd_cdc_if.h>
 #include <Sabertooth.h>
 #include <usb_proxy.h>
+#include <wave_lookup.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -142,8 +143,10 @@ char str[256];
 
 int tick_count = 0;
 float v = 0;
-float v_i = 24.3;
+float v_i = 25.5;
 static int count = 1;
+int sine_counter = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -320,6 +323,7 @@ int main(void) {
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	uint32_t prev_time = HAL_GetTick();
+	uint32_t wave_prev_time = HAL_GetTick();
 	while (1) {
 		//Loop should execute once every 1 tick
 		if (HAL_GetTick() - prev_time >= 1) {
@@ -520,14 +524,34 @@ int main(void) {
 //		  tick_count++;
 //		  if (tick_count >5000)
 //				  tick_count = 0;
+			int sampling_rate = 1000;
+			//generate sine wave
+			if (HAL_GetTick() - wave_prev_time > 1)
+			{
+//				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
+//				v = 12 * sin1(x, (tick_count++))/32767;
+
+//				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
+//				v = 12 * fourier(x, (tick_count++))/65536;
+
+				v = 5 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
+											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
+				tick_count++;
+				wave_prev_time = HAL_GetTick();
+			}
+
 
 			//mixed (fourier) voltage signal
-			float t = tick_count/5000;
-			tick_count++;
+//			float t = tick_count/5000;
+//			tick_count++;
+
+//			if (tick_count > sampling_rate)
+//				tick_count = 0;
 //			v = 12
 //					* (sin(2 * M_PI * 0.1 * t) + sin(2 * M_PI * 0.2 * t)
 //							+ sin(2 * M_PI * 0.4 * t) + sin(2 * M_PI * t));
-			v = 12*sin(2 * M_PI * 0.1* t);
+//			v = 12*sin(2 * M_PI * 0.1* t);
+
 			//calculate pwm
 			float duty_cycle = v / (v_i * 0.9735);
 			motor_command[LEFT_INDEX] = (int) (duty_cycle * 500.0);
