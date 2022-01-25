@@ -260,7 +260,7 @@ static void writeSabertoothCommand(Sabertooth_Handler *st_handler, uint8_t comma
 	}
 	send_buf[IDX_CHECKSUM_2(command)] = dataChecksum & 127;
 	if (command == SABERTOOTH_SET) {
-//		HAL_UART_Transmit(st_handler->huart, send_buf, SEND_BUF_SIZE_SET, HAL_MAX_DELAY);
+//		HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET, HAL_MAX_DELAY);
 		while(HAL_UART_Transmit_DMA(st_handler->huart, send_buf, SEND_BUF_SIZE_SET) != HAL_OK)
 		{
 //			i++;

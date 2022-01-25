@@ -57,7 +57,7 @@
 //if defned, rmb to switch mode on sabertooth from user mode 1 to 2 and vice versa
 //DIP5 OFF for serial
 //DIP5 ON for RC
-//#define SERIAL_CONTROL
+#define SERIAL_CONTROL
 #ifdef SERIAL_CONTROL
 #define SCALING 	(2047/500)
 #else
@@ -68,8 +68,8 @@
 #define USB_ACTIVATE
 
 //Test different control regime
-#define CX_CONTROL 0
-#define BY_CONTROL 1
+#define CX_CONTROL 1
+#define BY_CONTROL 0
 
 /* USER CODE END PD */
 
@@ -129,9 +129,16 @@ double target_heading, curr_heading;
 //PID struct and their tunings. There's one PID controller for each motor
 PID_Struct left_pid, right_pid, left_ramp_pid, right_ramp_pid, left_d_ramp_pid,
 		right_d_ramp_pid;
+#if BY_CONTROL
 double p = 0.0, i = 100.0 * SCALING, d = 0.0, f = 340 * SCALING, max_i_output =
 		40 * SCALING;
 double pid_freq = 500;
+#endif
+
+#if CX_CONTROL
+double p = 2.813, i = 116.67, d = 0.0, f = 11.1382, max_i_output =	40 ;
+double pid_freq = 500;
+#endif
 
 //Feedforward outputs from experimental data, at x speed, what feedforward factor is required
 //0.1 = 500, 0.2 = 450, 0.5 = 350, 0.7 = 320, 0.9 = 320
@@ -147,7 +154,7 @@ char str[256];
 
 int tick_count = 0;
 float v = 0;
-float v_i = 25.5;
+float v_i = 25.4;
 static int count = 1;
 int sine_counter = 0;
 
@@ -246,7 +253,7 @@ int main(void) {
 //  MotorReadBattery(&sabertooth_handler);
 	//Initialize BNO055
 //  BNO055Init();
-	MotorReadBattery(&sabertooth_handler);
+//	MotorReadBattery(&sabertooth_handler);
 	//Start UART output
 	HAL_UART_Transmit_DMA(&ROS_UART, (uint8_t*) data_to_ros,
 			(uint16_t) SIZE_DATA_TO_ROS * 2);
@@ -261,7 +268,7 @@ int main(void) {
 	double base_right_ramp_rate = 100 * SCALING;
 	double base_left_d_ramp_rate = 150 * SCALING;
 	double base_right_d_ramp_rate = 150 * SCALING;
-
+#if BY_CONTROL == 1
 	//Setup right wheel PID
 	PID_Init(&right_pid);
 	PID_setPIDF(&right_pid, p, i, d, f);
@@ -321,7 +328,21 @@ int main(void) {
 	PID_setOutputRampRate(&left_d_ramp_pid, left_max_d_ramp_rate_inc);
 	PID_setOutputDescentRate(&left_d_ramp_pid, -left_max_d_ramp_rate_inc);
 	PID_setFrequency(&left_d_ramp_pid, pid_freq);
+#endif
 
+#if CX_CONTROL == 1
+	//Setup right wheel PID
+	PID_Init(&right_pid);
+	PID_setPIDF(&right_pid, p, i, d, f);
+	PID_setOutputLimits(&right_pid, -20, 20);
+	PID_setFrequency(&right_pid, pid_freq);
+
+	//Setup left wheel PID
+	PID_Init(&left_pid);
+	PID_setPIDF(&left_pid, p, i, d, f);
+	PID_setOutputLimits(&left_pid, -20, 20);
+	PID_setFrequency(&left_pid, pid_freq);
+#endif
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -330,7 +351,7 @@ int main(void) {
 	uint32_t wave_prev_time = HAL_GetTick();
 	while (1) {
 		//Loop should execute once every 1 tick
-		if (HAL_GetTick() - prev_time >= 1) {
+		if (HAL_GetTick() - prev_time >= 2) {
 			imuRead(acc, gyro, 0.2);
 			encoderRead(encoder);
 			calcVelFromEncoder(encoder, velocity);
@@ -339,7 +360,6 @@ int main(void) {
 			//For data logging
 			angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
 			angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
-
 
 			//Wave generator
 			//If e st
@@ -360,7 +380,7 @@ int main(void) {
 			if (HAL_GetTick() - wave_prev_time > 1)
 			{
 //				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
-//				v = 12 * sin1(x, (tick_count++))/32767;
+//				v =  sin1(x, (tick_count++))/32767;
 
 //				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
 //				v = 12 * fourier(x, (tick_count++))/65536;
@@ -371,9 +391,13 @@ int main(void) {
 				wave_prev_time = HAL_GetTick();
 			}
 
-#if BY_CONTROL == 1
+			//If e stop engaged, override setpoints to 0
+			if (e_stop == 1) {
+				v = 0;
+			}
+
 			//use speed from data_from_ros array, pass on to motors, ensure the data is valid by checking end bit
-			if (1) {
+			if (BY_CONTROL) {
 				//Data received from ros is integer format, multiplied by 1000
 				setpoint_vel[LEFT_INDEX] = v;
 				setpoint_vel[RIGHT_INDEX] = v;
@@ -541,7 +565,26 @@ int main(void) {
 			  #endif
 
 			}
-#endif
+
+			if (CX_CONTROL){
+				//Data received from ros is integer format, multiplied by 1000
+				setpoint_vel[LEFT_INDEX] = v;
+				setpoint_vel[RIGHT_INDEX] = v;
+				double tmp1 = PID_getOutput(&left_pid,velocity[LEFT_INDEX], setpoint_vel[LEFT_INDEX]);
+				double tmp2 = PID_getOutput(&right_pid,velocity[RIGHT_INDEX], setpoint_vel[RIGHT_INDEX]);
+				motor_command[LEFT_INDEX] = (tmp1 / (v_i * 0.9735)) * 2047;
+				motor_command[RIGHT_INDEX] = (tmp2 / (v_i * 0.9735)) * 2047;
+#ifndef SERIAL_CONTROL
+
+				MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL =
+						motor_command[LEFT_INDEX] + 1500;
+				MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL =
+						motor_command[RIGHT_INDEX] + 1500;
+#else
+				  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+				  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+			  #endif
+				  }
 
 //			if ((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.005) {
 //				  setpoint_vel[LEFT_INDEX] = 0;
