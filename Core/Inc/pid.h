@@ -18,6 +18,7 @@ typedef struct PID{
 
 	//Limits
 	double maxIOutput;
+	double minIOutput;
 	double maxError;
 	double errorSum;
 	double prevError;
@@ -55,6 +56,7 @@ void PID_setPID(PID_Struct* pid, double p, double i, double d);
 void PID_setPIDF(PID_Struct* pid, double p, double i, double d, double f);
 void PID_setF(PID_Struct* pid, double f);
 void PID_setMaxIOutput(PID_Struct* pid, double maximum);
+void PID_setMinIOutput(PID_Struct* pid, double minimum);
 void PID_setOutputLimits(PID_Struct* pid, double min, double max);
 void PID_setDirection(PID_Struct* pid, int reversed);
 void PID_setSetpoint(PID_Struct* pid, double setpoint);

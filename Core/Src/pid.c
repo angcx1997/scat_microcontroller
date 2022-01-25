@@ -6,6 +6,11 @@
  */
 
 #include <pid.h>
+#include <math.h>
+
+#define DYNAMIC_INTEGRATOR 1
+
+
 
 void PID_Init(PID_Struct* pid)
 {
@@ -98,7 +103,7 @@ void PID_setF(PID_Struct* pid, double f)
 	pid->F = f;
 	checkSigns(pid);
 }
-
+//TODO: Implement dynamic integrator
 void PID_setMaxIOutput(PID_Struct* pid, double maximum)
 {
 	pid->maxIOutput = maximum;
@@ -107,6 +112,16 @@ void PID_setMaxIOutput(PID_Struct* pid, double maximum)
 		pid->maxError = pid->maxIOutput / pid->I;
 	}
 }
+
+void PID_setMinIOutput(PID_Struct* pid, double minimum)
+{
+	pid->minIOutput = minimum;
+	if(pid->I != 0)
+	{
+		pid->maxError = pid->maxIOutput / pid->I;
+	}
+}
+
 
 void PID_setOutputLimits(PID_Struct* pid, double min, double max)
 {
@@ -198,7 +213,7 @@ double PID_getOutput(PID_Struct* pid, double actual, double setpoint)
 	// 3. prevent windup by not increasing errorSum if output is output=maxOutput
 	pid->errorSum += error * dt;
 	Ioutput = pid->I * pid->errorSum;
-
+#if DYNAMIC_INTEGRATOR == 0
 	//Case 2: Clamp IOutput to max allowed integral output
 	if (pid->maxIOutput != 0 && !bounded(Ioutput, -pid->maxIOutput, pid->maxIOutput))
 	{
@@ -207,7 +222,21 @@ double PID_getOutput(PID_Struct* pid, double actual, double setpoint)
 		//Max Ioutput reached, clamp errorSum
 		pid->errorSum = oldErrorSum;
 	}
+#else
+	//TODO: Dyamic integrator clamping
+	double I_max = fmax(pid->maxOutput - Poutput,0);
+	double I_min = fmin(pid->minOutput - Poutput,0);
+	pid->maxIOutput = I_max;
+	pid->minIOutput = I_min;
 
+	if (!bounded(Ioutput, pid->minIOutput, pid->maxIOutput))
+	{
+		Ioutput = clamp(Ioutput, pid->minIOutput, pid->maxIOutput);
+
+		//Max Ioutput reached, clamp errorSum
+		pid->errorSum = oldErrorSum;
+	}
+#endif
 	//And, finally, we can just add the terms up
 	output = Foutput + Poutput + Ioutput + Doutput;
 
