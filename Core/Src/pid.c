@@ -8,7 +8,7 @@
 #include <pid.h>
 #include <math.h>
 
-#define DYNAMIC_INTEGRATOR 1
+#define DYNAMIC_INTEGRATOR 0
 
 
 
@@ -239,6 +239,8 @@ double PID_getOutput(PID_Struct* pid, double actual, double setpoint)
 #endif
 	//And, finally, we can just add the terms up
 	output = Foutput + Poutput + Ioutput + Doutput;
+
+
 
 	//Restrict output to our specified output and ramp limits
 	//Output decent rate should be negative

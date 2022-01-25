@@ -64,8 +64,12 @@
 #define SCALING 	1
 #endif
 
-//define
+//define if USB is activated to collect data
 #define USB_ACTIVATE
+
+//Test different control regime
+#define CX_CONTROL 0
+#define BY_CONTROL 1
 
 /* USER CODE END PD */
 
@@ -331,16 +335,48 @@ int main(void) {
 			encoderRead(encoder);
 			calcVelFromEncoder(encoder, velocity);
 			e_stop = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_12);
+
 			//For data logging
 			angular_velocity[LEFT_INDEX] = velocity[LEFT_INDEX];
 			angular_velocity[RIGHT_INDEX] = velocity[RIGHT_INDEX];
 
+
+			//Wave generator
+			//If e st
+			//Square wave
+			if (tick_count <= 2500){
+			  v = 12;
+			}
+			else{
+			  v = -12;
+			}
+			tick_count++;
+			if (tick_count >5000)
+				  tick_count = 0;
+
+
+			int sampling_rate = 1000;
+			//generate sine wave
+			if (HAL_GetTick() - wave_prev_time > 1)
+			{
+//				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
+//				v = 12 * sin1(x, (tick_count++))/32767;
+
+//				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
+//				v = 12 * fourier(x, (tick_count++))/65536;
+
+				v = 0.2 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
+											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
+				tick_count++;
+				wave_prev_time = HAL_GetTick();
+			}
+
+#if BY_CONTROL == 1
 			//use speed from data_from_ros array, pass on to motors, ensure the data is valid by checking end bit
-			if ((uint16_t) data_from_ros[SIZE_DATA_FROM_ROS / 2 - 1]
-					== 0xFFFB) {
+			if (1) {
 				//Data received from ros is integer format, multiplied by 1000
-				setpoint_vel[LEFT_INDEX] = (double) data_from_ros[0] / 1000.0;
-				setpoint_vel[RIGHT_INDEX] = (double) data_from_ros[1] / 1000.0;
+				setpoint_vel[LEFT_INDEX] = v;
+				setpoint_vel[RIGHT_INDEX] = v;
 
 				//Heading is synonymous to radius of curvature for given velocity pair
 				double target_angular = (setpoint_vel[RIGHT_INDEX]
@@ -418,16 +454,15 @@ int main(void) {
 
 				//If data is old, set setpoint to 0
 				else if ((HAL_GetTick() - prev_uart_time) > FREQUENCY * 0.2) {
-					setpoint_vel[LEFT_INDEX] = 0;
-					setpoint_vel[RIGHT_INDEX] = 0;
+//					setpoint_vel[LEFT_INDEX] = 0;
+//					setpoint_vel[RIGHT_INDEX] = 0;
 					HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw,
 							SIZE_DATA_FROM_ROS);
-				} else if ((HAL_GetTick() - prev_st_uart_time)
-						> FREQUENCY * 0.2) {
-//				  setpoint_vel[LEFT_INDEX] = 0;
-//				  setpoint_vel[RIGHT_INDEX] = 0;
-					MotorReadBattery(&sabertooth_handler);
 				}
+//					else if ((HAL_GetTick() - prev_st_uart_time)
+//						> FREQUENCY * 0.005) {
+////					MotorReadBattery(&sabertooth_handler);
+//				}
 
 				//Unbrake motors if there is command, brake otherwise
 				setBrakes();
@@ -497,93 +532,55 @@ int main(void) {
 #ifndef SERIAL_CONTROL
 
 				MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL =
-						motor_command[RIGHT_INDEX] + 1500;
+						motor_command[LEFT_INDEX] + 1500;
 				MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL =
 						motor_command[RIGHT_INDEX] + 1500;
 #else
-			  			  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
-			  			  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+				  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+				  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
 			  #endif
 
 			}
-			if ((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.005) {
+#endif
+
+//			if ((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.005) {
 //				  setpoint_vel[LEFT_INDEX] = 0;
 //				  setpoint_vel[RIGHT_INDEX] = 0;
-				count = 2;
-				MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
-			}
+//				count = 2;
+//				MotorReadCurrent(&sabertooth_handler, LEFT_MOTOR);
+//			}
 
-			//If e st
-			//Square wave
-//		  if (tick_count <= 2500){
-//			  v = 12;
-//		  }
-//		  else{
-//			  v = -12;
-//		  }
-//		  tick_count++;
-//		  if (tick_count >5000)
-//				  tick_count = 0;
-			int sampling_rate = 1000;
-			//generate sine wave
-			if (HAL_GetTick() - wave_prev_time > 1)
-			{
-//				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
-//				v = 12 * sin1(x, (tick_count++))/32767;
-
-//				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
-//				v = 12 * fourier(x, (tick_count++))/65536;
-
-				v = 5 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
-											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
-				tick_count++;
-				wave_prev_time = HAL_GetTick();
-			}
-
-
-			//mixed (fourier) voltage signal
-//			float t = tick_count/5000;
-//			tick_count++;
-
-//			if (tick_count > sampling_rate)
-//				tick_count = 0;
-//			v = 12
-//					* (sin(2 * M_PI * 0.1 * t) + sin(2 * M_PI * 0.2 * t)
-//							+ sin(2 * M_PI * 0.4 * t) + sin(2 * M_PI * t));
-//			v = 12*sin(2 * M_PI * 0.1* t);
 
 			//calculate pwm
-			float duty_cycle = v / (v_i * 0.9735);
-			motor_command[LEFT_INDEX] = (int) (duty_cycle * 500.0);
-			motor_command[RIGHT_INDEX] = (int) (duty_cycle * 500.0);
-
-			if (e_stop == 1) {
-				motor_command[LEFT_INDEX] = 0;
-				motor_command[RIGHT_INDEX] = 0;
-				duty_cycle = 0;
-			}
+//			float duty_cycle = v / (v_i * 0.9735);
+//			motor_command[LEFT_INDEX] = (int) (duty_cycle * 500.0);
+//			motor_command[RIGHT_INDEX] = (int) (duty_cycle * 500.0);
+//
+//			if (e_stop == 1) {
+//				motor_command[LEFT_INDEX] = 0;
+//				motor_command[RIGHT_INDEX] = 0;
+//				duty_cycle = 0;
+//			}
 
 			//Send PID commands to motor
-#ifndef SERIAL_CONTROL
-
-			MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX]
-					+ 1500;
-			MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX]
-					+ 1500;
-#else
-					  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
-					  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
-		  #endif
+//#ifndef SERIAL_CONTROL
+//
+//			MOTOR_TIM.Instance->LEFT_MOTOR_CHANNEL = motor_command[RIGHT_INDEX]
+//					+ 1500;
+//			MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL = motor_command[LEFT_INDEX]
+//					+ 1500;
+//#else
+//					  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
+//					  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
+//		  #endif
 #ifdef USB_ACTIVATE
-			send_formatter.current_1.b16 = sabertooth_handler.motor1.current;
-			send_formatter.current_2.b16 = sabertooth_handler.motor2.current;
-			send_formatter.duty_cycle_1.b16 = duty_cycle * 1000;
-			send_formatter.duty_cycle_2.b16 = duty_cycle * 1000;
-			send_formatter.temperature_1.b16 = sabertooth_handler.motor1.temp;
-			send_formatter.temperature_2.b16 = sabertooth_handler.motor2.temp;
+			//Send setpoint, controller effort, and feedback
+			send_formatter.current_1.b16 = setpoint_vel[LEFT_INDEX];
+			send_formatter.current_2.b16 = setpoint_vel[RIGHT_INDEX];
+			send_formatter.duty_cycle_1.b16 = motor_command[LEFT_INDEX];
+			send_formatter.duty_cycle_2.b16 = motor_command[RIGHT_INDEX];
 			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX] * 1000;
-			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]
-					* 1000;
+			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]* 1000;
 			send_formatter.voltage.b16 = sabertooth_handler.motor1.battery;
 			DataLog_Manager(&send_formatter);
 #endif
