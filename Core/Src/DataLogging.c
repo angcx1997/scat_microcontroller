@@ -152,9 +152,9 @@ double angular_velocity[2];
 uint32_t prev_st_uart_time = 0;
 char str[256];
 
-int tick_count = 0;
+float tick_count = 0;
 float v = 0;
-float v_i = 25.4;
+float v_i = 25.2;
 static int count = 1;
 int sine_counter = 0;
 
@@ -335,12 +335,16 @@ int main(void) {
 	PID_Init(&right_pid);
 	PID_setPIDF(&right_pid, p, i, d, f);
 	PID_setOutputLimits(&right_pid, -20, 20);
+	PID_setMaxIOutput(&right_pid, 20);
+	PID_setMinIOutput(&right_pid, -20);
 	PID_setFrequency(&right_pid, pid_freq);
 
 	//Setup left wheel PID
 	PID_Init(&left_pid);
 	PID_setPIDF(&left_pid, p, i, d, f);
 	PID_setOutputLimits(&left_pid, -20, 20);
+	PID_setMaxIOutput(&left_pid, 20);
+	PID_setMinIOutput(&left_pid, -20);
 	PID_setFrequency(&left_pid, pid_freq);
 #endif
 	/* USER CODE END 2 */
@@ -364,15 +368,15 @@ int main(void) {
 			//Wave generator
 			//If e st
 			//Square wave
-			if (tick_count <= 2500){
-			  v = 12;
-			}
-			else{
-			  v = -12;
-			}
-			tick_count++;
-			if (tick_count >5000)
-				  tick_count = 0;
+//			if (tick_count <= 2500){
+//			  v = 12;
+//			}
+//			else{
+//			  v = -12;
+//			}
+//			tick_count++;
+//			if (tick_count >5000)
+//				  tick_count = 0;
 
 
 			int sampling_rate = 1000;
@@ -385,10 +389,10 @@ int main(void) {
 //				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
 //				v = 12 * fourier(x, (tick_count++))/65536;
 
-				v = 0.2 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
+				v = 0.4 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
 											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
 				int prev_v = v;
-//				v = 0.8 * sin(2 * M_PI * tick_count/sampling_rate);
+//				v = 1 * sin(2 * M_PI * tick_count/sampling_rate);
 //				if (v>1 || v <-1)
 //					v = prev_v;
 				tick_count++;

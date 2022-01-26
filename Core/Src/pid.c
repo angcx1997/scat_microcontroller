@@ -8,7 +8,7 @@
 #include <pid.h>
 #include <math.h>
 
-#define DYNAMIC_INTEGRATOR 1
+#define DYNAMIC_INTEGRATOR 0
 
 
 
