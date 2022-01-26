@@ -387,6 +387,10 @@ int main(void) {
 
 				v = 0.2 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
 											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
+				int prev_v = v;
+//				v = 0.8 * sin(2 * M_PI * tick_count/sampling_rate);
+//				if (v>1 || v <-1)
+//					v = prev_v;
 				tick_count++;
 				wave_prev_time = HAL_GetTick();
 			}
@@ -618,8 +622,8 @@ int main(void) {
 //		  #endif
 #ifdef USB_ACTIVATE
 			//Send setpoint, controller effort, and feedback
-			send_formatter.current_1.b16 = setpoint_vel[LEFT_INDEX];
-			send_formatter.current_2.b16 = setpoint_vel[RIGHT_INDEX];
+			send_formatter.current_1.b16 = setpoint_vel[LEFT_INDEX] * 1000;
+			send_formatter.current_2.b16 = setpoint_vel[RIGHT_INDEX] * 1000;
 			send_formatter.duty_cycle_1.b16 = motor_command[LEFT_INDEX];
 			send_formatter.duty_cycle_2.b16 = motor_command[RIGHT_INDEX];
 			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX] * 1000;
