@@ -57,7 +57,7 @@
 //if defned, rmb to switch mode on sabertooth from user mode 1 to 2 and vice versa
 //DIP5 OFF for serial
 //DIP5 ON for RC
-#define SERIAL_CONTROL
+//#define SERIAL_CONTROL
 #ifdef SERIAL_CONTROL
 #define SCALING 	(2047/500)
 #else
@@ -68,8 +68,8 @@
 #define USB_ACTIVATE
 
 //Test different control regime
-#define CX_CONTROL 1
-#define BY_CONTROL 0
+#define CX_CONTROL 0
+#define BY_CONTROL 1
 
 /* USER CODE END PD */
 
@@ -389,10 +389,10 @@ int main(void) {
 //				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
 //				v = 12 * fourier(x, (tick_count++))/65536;
 
-				v = 0.4 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
-											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
+//				v = 0.4 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
+//											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
 				int prev_v = v;
-//				v = 1 * sin(2 * M_PI * tick_count/sampling_rate);
+				v = 1 * sin(2 * M_PI * tick_count/sampling_rate);
 //				if (v>1 || v <-1)
 //					v = prev_v;
 				tick_count++;
@@ -630,8 +630,8 @@ int main(void) {
 			send_formatter.current_2.b16 = setpoint_vel[RIGHT_INDEX] * 1000;
 			send_formatter.duty_cycle_1.b16 = motor_command[LEFT_INDEX];
 			send_formatter.duty_cycle_2.b16 = motor_command[RIGHT_INDEX];
-			send_formatter.velocity_1.b16 = angular_velocity[LEFT_INDEX] * 1000;
-			send_formatter.velocity_2.b16 = angular_velocity[RIGHT_INDEX]* 1000;
+			send_formatter.velocity_1.b16 = unfiltered_vel[LEFT_INDEX] * 1000;
+			send_formatter.velocity_2.b16 = unfiltered_vel[RIGHT_INDEX]* 1000;
 			send_formatter.voltage.b16 = sabertooth_handler.motor1.battery;
 			DataLog_Manager(&send_formatter);
 #endif

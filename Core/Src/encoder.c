@@ -12,6 +12,9 @@ uint16_t encoder_vals_prev[2] = {-1, -1};
 double velocities_prev[2] = {0, 0};
 uint32_t prev_time = 0;
 
+double unfiltered_vel[2]= {0, 0};
+double filtered_vel[2]= {0, 0};
+
 // Read Position
 // Hex command sequence: 0x00 0x00
 // Reset Encoder
@@ -113,9 +116,16 @@ void calcVelFromEncoder(uint16_t *encoder_vals, double *velocities)
 		velocities[LEFT_INDEX] = velocities_prev[LEFT_INDEX] + WHEEL_ACC_LIMIT * dt * (left_acc / fabs(left_acc));
 	}
 
+	unfiltered_vel[RIGHT_INDEX] = velocities[RIGHT_INDEX];
+	unfiltered_vel[LEFT_INDEX] = velocities[LEFT_INDEX];
+
 	//Exponential filter for each velocity
-	velocities[RIGHT_INDEX] = velocities[RIGHT_INDEX] * EXPONENTIAL_ALPHA + (1.0 - EXPONENTIAL_ALPHA) * velocities_prev[RIGHT_INDEX];
-	velocities[LEFT_INDEX] = velocities[LEFT_INDEX] * EXPONENTIAL_ALPHA + (1.0 - EXPONENTIAL_ALPHA) * velocities_prev[LEFT_INDEX];
+//	velocities[RIGHT_INDEX] = velocities[RIGHT_INDEX] * EXPONENTIAL_ALPHA + (1.0 - EXPONENTIAL_ALPHA) * velocities_prev[RIGHT_INDEX];
+//	velocities[LEFT_INDEX] = velocities[LEFT_INDEX] * EXPONENTIAL_ALPHA + (1.0 - EXPONENTIAL_ALPHA) * velocities_prev[LEFT_INDEX];
+//
+//	filtered_vel[RIGHT_INDEX] = velocities[RIGHT_INDEX];
+//	filtered_vel[LEFT_INDEX] = velocities[LEFT_INDEX];
+
 
 	//Set all previous values to current values
 	encoder_vals_prev[RIGHT_INDEX] = encoder_vals[RIGHT_INDEX];

@@ -19,4 +19,6 @@
 void encoderRead(uint16_t *encoder_vals);
 void calcVelFromEncoder(uint16_t *encoder_vals, double *velocities);
 
+extern double unfiltered_vel[2];
+extern double filtered_vel[2];
 #endif
