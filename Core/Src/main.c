@@ -278,6 +278,10 @@ double base_right_d_ramp_rate = 150;
   PID_setOutputDescentRate(&left_d_ramp_pid, -left_max_d_ramp_rate_inc);
   PID_setFrequency(&left_d_ramp_pid, pid_freq);
 
+  SL_Init(&linear_limit, &linear_speed_config);
+  SL_Init(&angular_limit, &angular_speed_config);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */

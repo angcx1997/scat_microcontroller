@@ -34,6 +34,7 @@
 #include <Sabertooth.h>
 #include <usb_proxy.h>
 #include <wave_lookup.h>
+#include <speed_limiter.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,11 +66,11 @@
 #endif
 
 //define if USB is activated to collect data
-#define USB_ACTIVATE
+//#define USB_ACTIVATE
 
 //Test different control regime
-#define CX_CONTROL 0
-#define BY_CONTROL 1
+#define CX_CONTROL 1
+#define BY_CONTROL 0
 
 /* USER CODE END PD */
 
@@ -139,6 +140,26 @@ double pid_freq = 500;
 double p = 2.813, i = 116.67, d = 0.0, f = 11.1382, max_i_output =	40 ;
 double pid_freq = 500;
 #endif
+
+speedConfig linear_speed_config = {
+		.max_acc = 0.8,
+		.min_acc = -0.4,
+		.max_vel = 1.0,
+		.min_vel = -0.5,
+		.max_jerk = 5.0,
+		.min_jerk = -5.0
+};
+speedConfig angular_speed_config = {
+		.max_acc = 0.8,
+		.min_acc = -0.8,
+		.max_vel = 1.0,
+		.min_vel = -1.0,
+		.max_jerk = 2.5,
+		.min_jerk = -2.5
+};
+limiter_t linear_limit;
+limiter_t angular_limit;
+
 
 //Feedforward outputs from experimental data, at x speed, what feedforward factor is required
 //0.1 = 500, 0.2 = 450, 0.5 = 350, 0.7 = 320, 0.9 = 320
@@ -347,6 +368,11 @@ int main(void) {
 	PID_setMinIOutput(&left_pid, -20);
 	PID_setFrequency(&left_pid, pid_freq);
 #endif
+
+	SL_Init(&linear_limit, &linear_speed_config);
+	SL_Init(&angular_limit, &angular_speed_config);
+
+
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -355,7 +381,7 @@ int main(void) {
 	uint32_t wave_prev_time = HAL_GetTick();
 	while (1) {
 		//Loop should execute once every 1 tick
-		if (HAL_GetTick() - prev_time >= 2) {
+		if (HAL_GetTick() - prev_time >= 1) {
 			imuRead(acc, gyro, 0.2);
 			encoderRead(encoder);
 			calcVelFromEncoder(encoder, velocity);
@@ -379,25 +405,30 @@ int main(void) {
 //				  tick_count = 0;
 
 
-			int sampling_rate = 1000;
-			//generate sine wave
-			if (HAL_GetTick() - wave_prev_time > 1)
-			{
-//				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
-//				v =  sin1(x, (tick_count++))/32767;
-
-//				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
-//				v = 12 * fourier(x, (tick_count++))/65536;
-
-//				v = 0.4 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
-//											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
-				int prev_v = v;
-				v = 1 * sin(2 * M_PI * tick_count/sampling_rate);
-//				if (v>1 || v <-1)
-//					v = prev_v;
-				tick_count++;
-				wave_prev_time = HAL_GetTick();
-			}
+//			int sampling_rate = 1000;
+//			//generate sine wave
+//			if (HAL_GetTick() - wave_prev_time > 1)
+//			{
+////				float x = SINE_ARR_SIZE * 0.001 * (float)tick_count;
+////				v =  sin1(x, (tick_count++))/32767;
+//
+////				float x = FOURIER_ARR_SIZE * 0.001 * (float)tick_count;
+////				v = 12 * fourier(x, (tick_count++))/65536;
+//
+////				v = 0.4 * (sin(2 * M_PI * 0.1 * tick_count/sampling_rate) + sin(2 * M_PI * 0.2 * tick_count/sampling_rate)
+////											+ sin(2 * M_PI * 0.4 * tick_count/sampling_rate) + sin(2 * M_PI * tick_count/sampling_rate));
+//				int prev_v = v;
+//				v = 1 * sin(2 * M_PI * tick_count/sampling_rate);
+////				if (v>1 || v <-1)
+////					v = prev_v;
+//				tick_count++;
+//				wave_prev_time = HAL_GetTick();
+//			}
+	 if((uint16_t)data_from_ros[SIZE_DATA_FROM_ROS / 2 - 1] == 0xFFFB)
+			  {
+				  //Data received from ros is integer format, multiplied by 1000
+				  setpoint_vel[LEFT_INDEX] = (double)data_from_ros[0] / 1000.0;
+				  setpoint_vel[RIGHT_INDEX] = (double)data_from_ros[1] / 1000.0;
 
 			//If e stop engaged, override setpoints to 0
 			if (e_stop == 1) {
@@ -406,10 +437,6 @@ int main(void) {
 
 			//use speed from data_from_ros array, pass on to motors, ensure the data is valid by checking end bit
 			if (BY_CONTROL) {
-				//Data received from ros is integer format, multiplied by 1000
-				setpoint_vel[LEFT_INDEX] = v;
-				setpoint_vel[RIGHT_INDEX] = v;
-
 				//Heading is synonymous to radius of curvature for given velocity pair
 				double target_angular = (setpoint_vel[RIGHT_INDEX]
 						- setpoint_vel[LEFT_INDEX]);
@@ -576,12 +603,32 @@ int main(void) {
 
 			if (CX_CONTROL){
 				//Data received from ros is integer format, multiplied by 1000
-				setpoint_vel[LEFT_INDEX] = v;
-				setpoint_vel[RIGHT_INDEX] = v;
+				linear_limit.v = (float)(setpoint_vel[LEFT_INDEX] + setpoint_vel[RIGHT_INDEX]) / 2;
+				angular_limit.v = (float)(setpoint_vel[LEFT_INDEX] - setpoint_vel[RIGHT_INDEX]) / BASE_WIDTH;
+				linear_limit.curr_t = angular_limit.curr_t = HAL_GetTick();
+				SL_Limit(&linear_limit);
+				SL_Limit(&angular_limit);
+				setpoint_vel[LEFT_INDEX] = linear_limit.v - angular_limit.v * BASE_WIDTH / 2;
+				setpoint_vel[RIGHT_INDEX] = linear_limit.v + angular_limit.v * BASE_WIDTH / 2;
 				double tmp1 = PID_getOutput(&left_pid,velocity[LEFT_INDEX], setpoint_vel[LEFT_INDEX]);
 				double tmp2 = PID_getOutput(&right_pid,velocity[RIGHT_INDEX], setpoint_vel[RIGHT_INDEX]);
 				motor_command[LEFT_INDEX] = (tmp1 / (v_i * 0.9735)) * 2047;
 				motor_command[RIGHT_INDEX] = (tmp2 / (v_i * 0.9735)) * 2047;
+			}
+			  }
+	 //If e stop engaged, override setpoints to 0
+	 				if (e_stop == 1) {
+	 					setpoint_vel[LEFT_INDEX] = 0;
+	 					setpoint_vel[RIGHT_INDEX] = 0;
+	 				}
+
+	 				//If data is old, set setpoint to 0
+	 				else if ((HAL_GetTick() - prev_uart_time) > FREQUENCY * 0.2) {
+	 //					setpoint_vel[LEFT_INDEX] = 0;
+	 //					setpoint_vel[RIGHT_INDEX] = 0;
+	 					HAL_UART_Receive_DMA(&ROS_UART, data_from_ros_raw,
+	 							SIZE_DATA_FROM_ROS);
+	 				}
 #ifndef SERIAL_CONTROL
 
 				MOTOR_TIM.Instance->RIGHT_MOTOR_CHANNEL =
@@ -592,7 +639,7 @@ int main(void) {
 				  MotorThrottle(&sabertooth_handler, LEFT_INDEX+1, motor_command[LEFT_INDEX]);
 				  MotorThrottle(&sabertooth_handler, RIGHT_INDEX+1, motor_command[RIGHT_INDEX]);
 			  #endif
-				  }
+
 
 //			if ((HAL_GetTick() - prev_st_uart_time) > FREQUENCY * 0.005) {
 //				  setpoint_vel[LEFT_INDEX] = 0;
